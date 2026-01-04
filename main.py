@@ -1,12 +1,15 @@
+import os
 import logging
 import asyncio
 from datetime import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, JobQueue
 import openai
-import os
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
@@ -17,17 +20,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Привет! Я бот с рецептами на ужин.\n"
         "Используй /settime <часы> <минуты> <повторы> чтобы настроить время и количество повторов.\n"
         "Используй /recipe чтобы получить рецепт прямо сейчас.\n"
-        "Можно указать предпочтения и ингредиенты: /recipe вегетарианский картофель, морковь"
+        "Можно указать предпочтения и ингредиенты: /recipe вегетарианский картофель морковь"
     )
 
 async def generate_recipe(preferences="", ingredients=""):
-    """Генерация рецепта через ChatGPT с учетом предпочтений и ингредиентов"""
+    """Генерация рецепта через ChatGPT"""
     prompt = "Предложи один легкий рецепт ужина с пошаговым описанием."
     if preferences:
         prompt += f" Предпочтения: {preferences}."
     if ingredients:
         prompt += f" Используй эти ингредиенты, если возможно: {ingredients}."
-    
+
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[
@@ -50,7 +53,7 @@ async def recipe(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ingredients = ", ".join(context.args[1:])
 
     recipe_text = await generate_recipe(preferences, ingredients)
-    user_settings[user_id] = {"last_recipe": recipe_text, "repeats_left": repeats}
+    user_settings[user_id] = {"last_recipe": recipe_text, "repeats_left": repeats, "repeats": repeats}
 
     keyboard = [
         [InlineKeyboardButton("Случайный другой рецепт", callback_data="random_recipe")],
@@ -95,6 +98,7 @@ async def send_recipe(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
     user_id = job.context
     repeats_left = user_settings.get(user_id, {}).get("repeats_left", 0)
+
     if repeats_left <= 0:
         return
 
