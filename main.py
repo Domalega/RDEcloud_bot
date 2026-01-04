@@ -5,6 +5,7 @@ from datetime import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, JobQueue
 import openai
+from flask import Flask, request
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -24,7 +25,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def generate_recipe(preferences="", ingredients=""):
-    """Генерация рецепта через ChatGPT"""
     prompt = "Предложи один легкий рецепт ужина с пошаговым описанием."
     if preferences:
         prompt += f" Предпочтения: {preferences}."
@@ -98,7 +98,6 @@ async def send_recipe(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
     user_id = job.context
     repeats_left = user_settings.get(user_id, {}).get("repeats_left", 0)
-
     if repeats_left <= 0:
         return
 
@@ -113,6 +112,18 @@ async def send_recipe(context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=user_id, text=recipe_text, reply_markup=InlineKeyboardMarkup(keyboard))
     user_settings[user_id]["repeats_left"] -= 1
 
+app = Flask("")
+
+@app.route("/", methods=["GET"])
+def home():
+    return "Bot is running!"
+
+@app.route(f"/{os.getenv('BOT_TOKEN')}", methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), bot=application.bot)
+    asyncio.run(application.update_queue.put(update))
+    return "ok"
+
 if __name__ == "__main__":
     application = ApplicationBuilder().token(os.getenv("BOT_TOKEN")).build()
 
@@ -121,4 +132,11 @@ if __name__ == "__main__":
     application.add_handler(CommandHandler("settime", settime))
     application.add_handler(CallbackQueryHandler(button))
 
-    application.run_polling()
+    import threading
+    port = int(os.environ.get("PORT", 5000))
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=port)).start()
+
+    # Настройка webhook в Telegram
+    import requests
+    TELEGRAM_WEBHOOK_URL = f"https://<YOUR_DOMAIN_ON_RENDER>/{os.getenv('BOT_TOKEN')}"
+    requests.get(f"https://api.telegram.org/bot{os.getenv('BOT_TOKEN')}/setWebhook?url={TELEGRAM_WEBHOOK_URL}")
