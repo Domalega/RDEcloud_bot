@@ -138,5 +138,5 @@ if __name__ == "__main__":
 
     # Настройка webhook в Telegram
     import requests
-    TELEGRAM_WEBHOOK_URL = f"https://<YOUR_DOMAIN_ON_RENDER>/{os.getenv('BOT_TOKEN')}"
+    TELEGRAM_WEBHOOK_URL = f"https://rdecloud-bot.onrender.com/{os.getenv('BOT_TOKEN')}"
     requests.get(f"https://api.telegram.org/bot{os.getenv('BOT_TOKEN')}/setWebhook?url={TELEGRAM_WEBHOOK_URL}")
