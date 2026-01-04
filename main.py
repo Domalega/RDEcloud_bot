@@ -2,20 +2,38 @@ import os
 import logging
 import asyncio
 from datetime import time
+from flask import Flask, request
+import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, JobQueue
 import openai
-from flask import Flask, request
+import threading
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 
+# --- OpenAI ---
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+# --- Хранение пользовательских настроек ---
 user_settings = {}
 
+# --- Flask для keep-alive ---
+app = Flask("")
+
+@app.route("/", methods=["GET"])
+def home():
+    return "Bot is running!"
+
+@app.route(f"/{os.getenv('BOT_TOKEN')}", methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), bot=application.bot)
+    asyncio.run(application.update_queue.put(update))
+    return "ok"
+
+# --- Telegram Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Привет! Я бот с рецептами на ужин.\n"
@@ -112,18 +130,7 @@ async def send_recipe(context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=user_id, text=recipe_text, reply_markup=InlineKeyboardMarkup(keyboard))
     user_settings[user_id]["repeats_left"] -= 1
 
-app = Flask("")
-
-@app.route("/", methods=["GET"])
-def home():
-    return "Bot is running!"
-
-@app.route(f"/{os.getenv('BOT_TOKEN')}", methods=["POST"])
-def webhook():
-    update = Update.de_json(request.get_json(force=True), bot=application.bot)
-    asyncio.run(application.update_queue.put(update))
-    return "ok"
-
+# --- Main ---
 if __name__ == "__main__":
     application = ApplicationBuilder().token(os.getenv("BOT_TOKEN")).build()
 
@@ -132,11 +139,10 @@ if __name__ == "__main__":
     application.add_handler(CommandHandler("settime", settime))
     application.add_handler(CallbackQueryHandler(button))
 
-    import threading
+    # --- Flask keep-alive ---
     port = int(os.environ.get("PORT", 5000))
     threading.Thread(target=lambda: app.run(host="0.0.0.0", port=port)).start()
 
-    # Настройка webhook в Telegram
-    import requests
+    # --- Установка webhook в Telegram ---
     TELEGRAM_WEBHOOK_URL = f"https://rdecloud-bot.onrender.com/{os.getenv('BOT_TOKEN')}"
     requests.get(f"https://api.telegram.org/bot{os.getenv('BOT_TOKEN')}/setWebhook?url={TELEGRAM_WEBHOOK_URL}")
